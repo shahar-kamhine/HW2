@@ -1,6 +1,11 @@
 package il.ac.tau.cs.software1.bigram;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Locale;
 
 public class BigramModel {
@@ -79,32 +84,122 @@ public class BigramModel {
      * @post: mBigramCounts = prev(mBigramCounts)
      */
     public String[] buildVocabularyIndex(String fileName) throws IOException { // Question 1
-        // TODO: implement
-        return null;
+        String[] vocabulary = new String[MAX_VOCABULARY_SIZE];
+        int count = 0;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(fileName))) {
+            String line;
+            while (count < MAX_VOCABULARY_SIZE && (line = reader.readLine()) != null) {
+                for (String token : line.split("\\s+")) {
+                    String word = normalizeWord(token);
+
+                    if (word != null && findIndex(vocabulary, word) == ELEMENT_NOT_FOUND) {
+                        vocabulary[count] = word;
+                        count++;
+
+                        if (count == MAX_VOCABULARY_SIZE) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        return Arrays.copyOf(vocabulary, count);
     }
 
     /*
      * @post: mVocabulary = prev(mVocabulary)
      * @post: mBigramCounts = prev(mBigramCounts)
      */
-    public int[][] buildCountsArray(String fileName, String[] vocabulary) throws IOException { // Question 2
-        // TODO: implement
-        return null;
+public int[][] buildCountsArray(String fileName, String[] vocabulary) throws IOException {
+    int n = vocabulary.length;
+    int[][] counts = new int[n][n];
+
+    try (BufferedReader reader = new BufferedReader(new FileReader(fileName))) {
+        String line;
+        while ((line = reader.readLine()) != null) {
+            String[] tokens = line.split("\\s+");
+            int previousIndex = ELEMENT_NOT_FOUND;
+
+            for (String token : tokens) {
+                String word = normalizeWord(token);
+                int currentIndex = ELEMENT_NOT_FOUND;
+                if (word != null) {
+                    currentIndex = findIndex(vocabulary, word);
+                }
+
+                if (previousIndex != ELEMENT_NOT_FOUND && currentIndex != ELEMENT_NOT_FOUND) {
+                    counts[previousIndex][currentIndex]++;
+                }
+
+                previousIndex = currentIndex;
+            }
+        }
     }
+
+    return counts;
+}
 
     /*
      * @pre: the method initModel was called (the language model is initialized)
      * @pre: fileName is a legal file path
      */
-    public void saveModel(String fileName) throws IOException { // Question 3
-        // TODO: implement
+public void saveModel(String fileName) throws IOException {
+    try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName + VOC_FILE_SUFFIX))) {
+        writer.write(mVocabulary.length + " words");
+        writer.newLine();
+
+        for (int i = 0; i < mVocabulary.length; i++) {
+            writer.write(i + "," + mVocabulary[i]);
+            writer.newLine();
+        }
     }
+
+    try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName + COUNTS_FILE_SUFFIX))) {
+        for (int i = 0; i < mBigramCounts.length; i++) {
+            for (int j = 0; j < mBigramCounts[i].length; j++) {
+                int count = mBigramCounts[i][j];
+                if (count > 0) {
+                    writer.write(i + "," + j + ":" + count);
+                    writer.newLine();
+                }
+            }
+        }
+    }
+}
 
     /*
      * @pre: fileName is a legal file path
      */
     public void loadModel(String fileName) throws IOException { // Question 4
-        // TODO: implement
+        try (BufferedReader reader = new BufferedReader(new FileReader(fileName + VOC_FILE_SUFFIX))) {
+            String header = reader.readLine();
+            int size = Integer.parseInt(header.split(" ")[0]);
+            mVocabulary = new String[size];
+
+            for (int i = 0; i < size; i++) {
+                String line = reader.readLine();
+                String[] parts = line.split(",", 2);
+                int index = Integer.parseInt(parts[0]);
+                mVocabulary[index] = parts[1];
+            }
+        }
+
+        int size = mVocabulary.length;
+        mBigramCounts = new int[size][size];
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(fileName + COUNTS_FILE_SUFFIX))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split("[,:]");
+                int firstIndex = Integer.parseInt(parts[0]);
+                int secondIndex = Integer.parseInt(parts[1]);
+                int count = Integer.parseInt(parts[2]);
+
+                mBigramCounts[firstIndex][secondIndex] = count;
+            }
+}
     }
 
     /*
@@ -114,8 +209,28 @@ public class BigramModel {
      * @post: if sentence is probable, according to the model, $ret = true, else, $ret = false
      */
     public boolean isLegalSentence(String sentence) { // Question 5
-        // TODO: implement
-        return false;
+        if (sentence.isEmpty()) {
+            return true;
+        }
+        if (sentence.startsWith(" ") || sentence.endsWith(" ")) {
+            return false; // Leading or trailing spaces are not allowed
+        }
+        if (sentence.contains("  ")) {
+            return false; // Multiple consecutive spaces are not allowed
+        }
+        String[] words = sentence.split(" ");
+        if (words.length == 1) {
+            return getWordIndex(words[0]) != ELEMENT_NOT_FOUND; // Single word must be in vocabulary
+        }
+        for (int i = 0; i < words.length - 1; i++) {
+            String word1 = words[i];
+            String word2 = words[i + 1];
+
+            if (getBigramCount(word1, word2) == 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     ///////////////////////////////////////////////////////////////////////////
